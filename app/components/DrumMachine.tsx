@@ -29,6 +29,12 @@ const SOUNDS: Sound[] = [
 ];
 
 const STEPS = 8;
+const STORAGE_KEY = "drum-machine-patterns";
+
+type SavedPattern = {
+  sequence: boolean[][];
+  bpm: number;
+};
 
 function playSound(ctx: AudioContext, id: string): void {
   const now = ctx.currentTime;
@@ -309,6 +315,41 @@ export default function DrumMachine() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
   const [bpm, setBpm] = useState(120);
+  const [patterns, setPatterns] = useState<Record<string, SavedPattern>>({});
+  const [patternName, setPatternName] = useState("");
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) setPatterns(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  const savePattern = () => {
+    const name = patternName.trim();
+    if (!name) return;
+    const updated = { ...patterns, [name]: { sequence, bpm } };
+    setPatterns(updated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  };
+
+  const loadPattern = (name: string) => {
+    const p = patterns[name];
+    if (!p) return;
+    setSequence(p.sequence.map(row => {
+      return Array(STEPS).fill(false).map((_, j) => row[j] ?? false);
+    }));
+    setBpm(p.bpm);
+    setPatternName(name);
+  };
+
+  const deletePattern = (name: string) => {
+    const updated = { ...patterns };
+    delete updated[name];
+    setPatterns(updated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    if (patternName === name) setPatternName("");
+  };
 
   const getAudioCtx = useCallback((): AudioContext => {
     if (!audioCtxRef.current) {
@@ -493,6 +534,71 @@ export default function DrumMachine() {
           >
             CLEAR
           </button>
+        </div>
+
+        {/* Pattern Save/Load row */}
+        <div
+          className="flex flex-wrap items-center gap-3 mb-5 pt-4"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+        >
+          <input
+            type="text"
+            placeholder="Pattern name…"
+            value={patternName}
+            onChange={e => setPatternName(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") savePattern(); }}
+            className="px-3 py-1.5 rounded-lg text-xs font-mono text-white placeholder-gray-600 focus:outline-none"
+            style={{
+              width: "148px",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+            }}
+          />
+          <button
+            onClick={savePattern}
+            disabled={!patternName.trim()}
+            className="px-4 py-1.5 rounded-lg text-xs font-bold tracking-widest uppercase transition-opacity"
+            style={{
+              background: "rgba(92,200,250,0.12)",
+              border: "1px solid rgba(92,200,250,0.3)",
+              color: "#5ac8fa",
+              opacity: patternName.trim() ? 1 : 0.3,
+            }}
+          >
+            SAVE
+          </button>
+
+          {Object.keys(patterns).length > 0 && (
+            <select
+              value=""
+              onChange={e => { if (e.target.value) loadPattern(e.target.value); }}
+              className="px-3 py-1.5 rounded-lg text-xs font-mono text-gray-300 focus:outline-none cursor-pointer"
+              style={{
+                background: "#111827",
+                border: "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              <option value="" disabled>Load pattern…</option>
+              {Object.keys(patterns).map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          )}
+
+          {patternName && patterns[patternName] && (
+            <button
+              onClick={() => deletePattern(patternName)}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold tracking-widest uppercase transition-colors"
+              style={{
+                border: "1px solid rgba(255,45,85,0.25)",
+                color: "rgba(255,45,85,0.6)",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#ff2d55")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,45,85,0.6)")}
+            >
+              DELETE
+            </button>
+          )}
         </div>
 
         {/* Beat number header */}
